@@ -551,14 +551,14 @@
           }
 
           // Inbound Patch
-          const origOnLoad = this.onload;
-          this.onload = function(e) {
+          const patchResponse = function() {
+            if (this._vubbio_response_patched) return;
             try {
               let data = null;
-              if (this.responseType === 'json' && typeof this.response === 'object') {
+              if (this.responseType === 'json' && this.response && typeof this.response === 'object') {
                 data = this.response;
               } else if (this.responseText) {
-                data = JSON.parse(this.responseText);
+                try { data = JSON.parse(this.responseText); } catch { data = null; }
               }
 
               if (data) {
@@ -580,7 +580,6 @@
                   for (const m of data.messages) {
                     if (m.author) self.inspectAndPatchUser(m.author);
                     if (m.user) self.inspectAndPatchUser(m.user);
-                    // Cache message for Message Logger
                     if (m.id) self.deletedMessages.set(String(m.id), m);
                     modified = true;
                   }
@@ -591,15 +590,50 @@
 
                 if (modified) {
                   const newStr = JSON.stringify(data);
-                  Object.defineProperty(this, 'responseText', { get: () => newStr, configurable: true });
-                  Object.defineProperty(this, 'response', {
-                    get: () => (this.responseType === 'json' ? data : newStr),
-                    configurable: true
-                  });
+                  try {
+                    Object.defineProperty(this, 'responseText', { get: () => newStr, configurable: true });
+                  } catch {}
+                  try {
+                    Object.defineProperty(this, 'response', {
+                      get: () => (this.responseType === 'json' ? data : newStr),
+                      configurable: true
+                    });
+                  } catch {}
+                  this._vubbio_response_patched = true;
                 }
               }
             } catch {}
+          };
+
+          const origOnLoad = this.onload;
+          this.onload = function(e) {
+            patchResponse.call(this);
             if (origOnLoad) origOnLoad.call(this, e);
+          };
+
+          const origOnReady = this.onreadystatechange;
+          this.onreadystatechange = function(e) {
+            if (this.readyState === 4) patchResponse.call(this);
+            if (origOnReady) origOnReady.call(this, e);
+          };
+
+          const origAddEventListener = this.addEventListener.bind(this);
+          this.addEventListener = function(type, listener, ...rest) {
+            if (typeof listener !== 'function') return origAddEventListener(type, listener, ...rest);
+            if (type === 'load' || type === 'readystatechange' || type === 'loadend') {
+              const wrapped = function(e) {
+                try {
+                  if (type === 'readystatechange') {
+                    if (this.readyState === 4) patchResponse.call(this);
+                  } else {
+                    patchResponse.call(this);
+                  }
+                } catch {}
+                return listener.call(this, e);
+              };
+              return origAddEventListener(type, wrapped, ...rest);
+            }
+            return origAddEventListener(type, listener, ...rest);
           };
 
           return super.send(body);
@@ -643,25 +677,27 @@
       const self = this;
       const OrigWS = window.WebSocket;
 
-      window.WebSocket = function(...args) {
-        const ws = new OrigWS(...args);
+      const PatchedWebSocket = class VubbioWebSocket extends OrigWS {
+        constructor(...args) {
+          super(...args);
+          const ws = this;
 
-        // Stealth Typing Outgoing
-        const origSend = ws.send;
-        ws.send = function(data) {
-          if (settings.stealthTyping && typeof data === 'string') {
-            try {
-              const parsed = JSON.parse(data);
-              if (parsed.t === 'TYPING_START' || parsed.event === 'typing' || parsed.type === 'typing') {
-                return; // Drop typing packet
-              }
-            } catch {}
-          }
-          return origSend.call(this, data);
-        };
+          // Stealth Typing Outgoing
+          const origSend = ws.send.bind(ws);
+          ws.send = function(data) {
+            if (settings.stealthTyping && typeof data === 'string') {
+              try {
+                const parsed = JSON.parse(data);
+                if (parsed.t === 'TYPING_START' || parsed.event === 'typing' || parsed.type === 'typing') {
+                  return; // Drop typing packet
+                }
+              } catch {}
+            }
+            return origSend(data);
+          };
 
-        // Incoming Messages & Deletions
-        ws.addEventListener('message', (event) => {
+          // Incoming Messages & Deletions
+          ws.addEventListener('message', (event) => {
           try {
             if (typeof event.data === 'string') {
               const msg = JSON.parse(event.data);
@@ -696,9 +732,19 @@
             }
           } catch {}
         });
+      }
 
-        return ws;
-      };
+      } // close PatchedWebSocket class
+
+      try {
+        for (const prop of Object.getOwnPropertyNames(OrigWS)) {
+          if (prop === 'prototype' || prop === 'name' || prop === 'length') continue;
+          const desc = Object.getOwnPropertyDescriptor(OrigWS, prop);
+          if (desc) Object.defineProperty(PatchedWebSocket, prop, desc);
+        }
+      } catch {}
+
+      window.WebSocket = PatchedWebSocket;
     },
 
     // ============================================================
@@ -707,8 +753,14 @@
     async hookStores() {
       try {
         const scriptEl = document.querySelector('script[type="module"][src*="index-"]') ||
-                         document.querySelector('script[src*="index-"]');
-        const src = scriptEl ? scriptEl.getAttribute('src') : './assets/index-BTphJn22.js';
+                         document.querySelector('script[src*="index-"]') ||
+                         document.querySelector('script[type="module"][src*="index"]') ||
+                         document.querySelector('script[src*="assets/index"]');
+        const src = scriptEl ? scriptEl.getAttribute('src') : null;
+        if (!src) {
+          console.warn('[Vubbio] Ana modül scripti bulunamadı, store bağlama atlanıyor.');
+          return;
+        }
 
         const mainModule = await import(src);
         if (mainModule) {
@@ -861,8 +913,9 @@
       if (oldStyle) oldStyle.remove();
 
       const curUser = this.authStore?.getState()?.user;
-      const initialName = curUser?.display_name || curUser?.username || 'Polat';
-      const initialHandle = '@' + (curUser?.username || 'polatt');
+      const __esc = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      const initialName = __esc(curUser?.display_name || curUser?.username || 'Polat');
+      const initialHandle = __esc('@' + (curUser?.username || 'polatt'));
 
       const style = document.createElement('style');
       style.id = 'vubbio-custom-css';
@@ -2050,12 +2103,17 @@
       });
 
       // Global Hotkey: Ctrl + Shift + V
-      window.addEventListener('keydown', (e) => {
+      if (window.__vubbio_keydown) {
+        window.removeEventListener('keydown', window.__vubbio_keydown);
+      }
+      const __vubbio_keydown = (e) => {
         if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'v') {
           e.preventDefault();
           modalRoot.classList.toggle('active');
         }
-      });
+      };
+      window.__vubbio_keydown = __vubbio_keydown;
+      window.addEventListener('keydown', __vubbio_keydown);
 
       // Tabs
       modalRoot.querySelectorAll('.vubbio-tab-btn').forEach(btn => {

@@ -250,8 +250,24 @@ async function main() {
       case 'status':
         patcher.status();
         break;
+      case 'repair':
+        console.log(`${c.yellow}🔧 Onarım modu: Vubbio yeniden kuruluyor...${c.reset}`);
+        if (patcher.isInstalled()) {
+          try {
+            fs.copyFileSync(patcher.backupPath, patcher.asarPath);
+            fs.unlinkSync(patcher.backupPath);
+          } catch (e) {
+            console.warn(`${c.yellow}⚠️ Yedek geri yüklenemedi: ${e.message}${c.reset}`);
+          }
+          if (fs.existsSync(patcher.vubbioAppData)) {
+            fs.rmSync(patcher.vubbioAppData, { recursive: true, force: true });
+          }
+        }
+        patcher.validate();
+        await patcher.install();
+        break;
       default:
-        console.log(`Kullanım: node install.js [install|uninstall|status]`);
+        console.log(`Kullanım: node install.js [install|uninstall|status|repair]`);
     }
   } catch (err) {
     console.error(`${c.red}❌ Hata: ${err.message}${c.reset}`);

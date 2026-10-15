@@ -13,7 +13,7 @@ function Write-Banner {
     Write-Host ""
     Write-Host "╔═══════════════════════════════════════════╗" -ForegroundColor Green
     Write-Host "║          ⚡  VUBBIO  INSTALLER  ⚡          ║" -ForegroundColor Green
-    Write-Host "║     Jubbio Nexus Mod Loader v1.0.0        ║" -ForegroundColor Green
+    Write-Host "║     Jubbio Nexus Mod Loader v3.0.0        ║" -ForegroundColor Green
     Write-Host "╚═══════════════════════════════════════════╝" -ForegroundColor Green
     Write-Host ""
 }
