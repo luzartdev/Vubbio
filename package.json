@@ -1,0 +1,19 @@
+{
+  "name": "vubbio",
+  "version": "2.0.0",
+  "description": "Jubbio için Vencord/BetterDiscord tarzı mod loader - Nexus paralı özelliklerini açar",
+  "main": "installer/install.js",
+  "scripts": {
+    "install-vubbio": "node installer/install.js install",
+    "uninstall-vubbio": "node installer/install.js uninstall",
+    "status": "node installer/install.js status",
+    "repair": "node installer/install.js repair",
+    "install-win": "powershell -ExecutionPolicy Bypass -File scripts\\install.ps1"
+  },
+  "keywords": ["jubbio", "mod", "nexus", "plugin", "vencord"],
+  "author": "Vubbio",
+  "license": "MIT",
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}
