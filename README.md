@@ -43,6 +43,7 @@ powershell -ExecutionPolicy Bypass -File scripts\install.ps1
 | `node installer/install.js install` | Vubbio'yu kur |
 | `node installer/install.js uninstall` | Vubbio'yu kaldır |
 | `node installer/install.js status` | Kurulum durumu |
+| `node installer/install.js repair` | Bozuk kurulumu onar / yeniden kur |
 
 ---
 
