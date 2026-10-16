@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Vubbio Installer v3.0 (Zero-Shift In-Place ASAR Patcher)
- * Jubbio Nexus Mod Loader - Vencord tarzı
+ * Vubbio Installer v6.0 (Zero-Shift In-Place ASAR Patcher)
+ * Jubbio Nexus Mod Loader - Vencord / BetterDiscord Suite
  * 
  * Bu patcher ASAR arşivindeki hiçbir dosyanın offset'ini veya boyutunu DEĞİŞTİRMEZ.
  * Byte-exact replacement sayesinde 404, eksik dosya veya açılmama sorunları %100 önlenir.
@@ -27,8 +27,8 @@ const c = {
 function banner() {
   console.log(`
 ${c.lime}${c.bold}╔═══════════════════════════════════════════╗
-║          ⚡  VUBBIO  INSTALLER  ⚡          ║
-║     Jubbio Nexus Mod Loader v3.0.0        ║
+║          ⚡  VUBBIO  ULTRA v6.0  ⚡         ║
+║     Jubbio Nexus Mod Loader & Suite       ║
 ║         (Vencord / Discord Style)         ║
 ╚═══════════════════════════════════════════╝${c.reset}
 `);
@@ -215,15 +215,43 @@ ${c.lime}${c.bold}════════════════════�
     const installed = this.isInstalled();
     const asarExists = fs.existsSync(this.asarPath);
     const size = asarExists ? Math.round(fs.statSync(this.asarPath).size / 1024 / 1024) : 0;
+    const appDataScript = path.join(this.vubbioAppData, 'index.js');
+    const appDataExists = fs.existsSync(appDataScript);
     console.log(`
 ${c.bold}Vubbio Durum Raporu:${c.reset}
 ----------------------------------------
-Jubbio Yolu: ${c.cyan}${this.jubbioPath}${c.reset}
-app.asar:    ${asarExists ? c.green + `✓ Mevcut (${size}MB)` : c.red + '✗ Yok'}${c.reset}
-Durum:       ${installed ? c.lime + '✓ Vubbio Kurulu' : c.yellow + '○ Orijinal Jubbio'}${c.reset}
-Yedek:       ${installed ? c.green + '✓ Mevcut' : c.dim + '- Yok'}${c.reset}
+Jubbio Yolu:    ${c.cyan}${this.jubbioPath}${c.reset}
+app.asar:       ${asarExists ? c.green + `✓ Mevcut (${size}MB)` : c.red + '✗ Yok'}${c.reset}
+Loader Durumu:  ${installed ? c.lime + '✓ Vubbio Enjekte Edildi' : c.yellow + '○ Orijinal Jubbio'}${c.reset}
+Yedek Arşiv:    ${installed ? c.green + '✓ Güvende' : c.dim + '- Yok'}${c.reset}
+AppData Script: ${appDataExists ? c.green + `✓ Güncel (${path.basename(appDataScript)})` : c.red + '✗ Eksik'}${c.reset}
 ----------------------------------------
 `);
+  }
+
+  sync() {
+    console.log(`${c.cyan}⚡ Vubbio eklentisi AppData'ya senkronize ediliyor...${c.reset}`);
+    if (!fs.existsSync(this.vubbioSrc)) {
+      throw new Error(`Kaynak dosya bulunamadı: ${this.vubbioSrc}`);
+    }
+    if (!fs.existsSync(this.vubbioAppData)) {
+      fs.mkdirSync(this.vubbioAppData, { recursive: true });
+    }
+    const dest = path.join(this.vubbioAppData, 'index.js');
+    fs.copyFileSync(this.vubbioSrc, dest);
+    const stat = fs.statSync(dest);
+    console.log(`${c.green}  ✓ Senkronizasyon başarılı: ${Math.round(stat.size / 1024)} KB${c.reset}`);
+    console.log(`${c.lime}  Hedef: ${dest}${c.reset}`);
+    console.log(`${c.cyan}  İpucu: Jubbio açıkken Ctrl + R veya F5 ile yenileyerek değişiklikleri anında görebilirsiniz.${c.reset}`);
+  }
+
+  async repair() {
+    console.log(`${c.yellow}🔧 Vubbio onarılıyor...${c.reset}`);
+    if (this.isInstalled()) {
+      await this.uninstall();
+    }
+    await this.install();
+    console.log(`${c.lime}  ✓ Onarım tamamlandı!${c.reset}`);
   }
 }
 
@@ -250,8 +278,15 @@ async function main() {
       case 'status':
         patcher.status();
         break;
+      case 'sync':
+        patcher.sync();
+        break;
+      case 'repair':
+        patcher.validate();
+        await patcher.repair();
+        break;
       default:
-        console.log(`Kullanım: node install.js [install|uninstall|status]`);
+        console.log(`Kullanım: node install.js [install|uninstall|status|sync|repair]`);
     }
   } catch (err) {
     console.error(`${c.red}❌ Hata: ${err.message}${c.reset}`);

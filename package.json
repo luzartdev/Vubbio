@@ -8,6 +8,7 @@
     "uninstall-vubbio": "node installer/install.js uninstall",
     "status": "node installer/install.js status",
     "repair": "node installer/install.js repair",
+    "sync": "node installer/install.js sync",
     "install-win": "powershell -ExecutionPolicy Bypass -File scripts\\install.ps1"
   },
   "keywords": ["jubbio", "mod", "nexus", "plugin", "vencord"],
